@@ -43,10 +43,20 @@
 
 # COMMAND ----------
 
+print(username, database, project)
+
+# COMMAND ----------
+
+# spark.sql(f"set var.username = {username}")
+# spark.sql(f"set var.database = {database}")
+# spark.sql(f"set var.project = {project}")
+
+# COMMAND ----------
+
 # DBTITLE 0,Import Data and create pre-Databricks Delta Table
 from pyspark.sql.functions import monotonically_increasing_id 
 from pyspark.sql.types import LongType
-DELTALAKE_SILVER_PATH = "/user/hive/warehouse/fouad.db/loan_stats_delta"
+DELTALAKE_SILVER_PATH = f"/user/hive/warehouse/{username}/loan_stats_delta"
 spark.conf.set("spark.databricks.delta.retentionDurationCheck.enabled", False)
 
 data = spark.read.parquet("/databricks-datasets/samples/lending_club/parquet/")
@@ -59,9 +69,6 @@ loan_stats = loan_stats.select("addr_state", "loan_status", "loan_amnt", "grade"
 .withColumn("loan_amnt", loan_stats["loan_amnt"].cast(LongType())) \
 .withColumn("id", monotonically_increasing_id())
 
-loan_stats.write.mode("overwrite") \
-.format("parquet") \
-.save("dbfs:/tmp/loan_stats.parquet")
 
 # COMMAND ----------
 
@@ -70,17 +77,77 @@ loan_stats.write.mode("overwrite") \
 
 # COMMAND ----------
 
+spark.sql("""create database if not exists {} LOCATION '{}/tables' """.format(database, project))
+spark.sql("""USE {}""".format(database))
+
+# COMMAND ----------
+
+tables = ["loan_stats_parquet", "loan_stats_delta"]
+for table in tables:
+  spark.sql("""
+  drop table if exists {}.{}
+  """.format(database, table))
+
+# COMMAND ----------
+
+dbutils.fs.rm(project+"/databasae/loan_stats_parquet", True)
+dbutils.fs.rm(project+"/databasae/loan_stats_delta", True)
+
+# COMMAND ----------
+
+loan_stats.write.mode("overwrite") \
+.format("parquet") \
+.saveAsTable("loan_stats_parquet")
+
+# COMMAND ----------
+
+display(loan_stats)
+
+# COMMAND ----------
+
+# loan_stats.write.mode("overwrite") \
+# .format("parquet") \
+# .save(f"dbfs:/tmp/{username}/loan_stats.parquet")
+
+# loan_stats.createOrReplaceTempView("loan_stats")
+
+# COMMAND ----------
+
+# spark.sql("""
+# create table loan_stats_parquet 
+# (addr_state STRING, loan_status STRING, loan_amnt LONG, grade STRING, id LONG)
+# using parquet
+# location '/tmp/{}/loan_stats.parquet'
+# as select * from loan_stats
+# """.format(username))
+
+# COMMAND ----------
+
+# spark.sql("""
+# create table loan_stats_parquet 
+# (addr_state STRING, loan_status STRING, loan_amnt LONG, grade STRING, id LONG)
+# using parquet
+# location '/tmp/{}/loan_stats.parquet'
+# as select * from loan_stats
+# """.format(username))
+
+# COMMAND ----------
+
+# MAGIC %fs ls /user/christopher.chalcraft@databricks.com/golden_demos/delta/database/loan_stats_parquet
+
+# COMMAND ----------
+
 # MAGIC %sql
 # MAGIC -- Parquet table creation
-# MAGIC CREATE DATABASE IF NOT EXISTS fouad;
-# MAGIC USE fouad;
+# MAGIC -- CREATE DATABASE IF NOT EXISTS cchalc;
+# MAGIC -- USE cchalc;
 # MAGIC 
-# MAGIC DROP TABLE IF EXISTS loan_stats_parquet;
-# MAGIC DROP TABLE IF EXISTS loan_stats_delta;
+# MAGIC -- DROP TABLE IF EXISTS loan_stats_parquet;
+# MAGIC -- DROP TABLE IF EXISTS loan_stats_delta;
 # MAGIC 
-# MAGIC CREATE TABLE  loan_stats_parquet
-# MAGIC USING parquet
-# MAGIC LOCATION '/tmp/loan_stats.parquet';
+# MAGIC -- CREATE TABLE  loan_stats_parquet
+# MAGIC -- USING parquet
+# MAGIC -- LOCATION '/tmp/christopher.chalcraft@databricks.com/loan_stats.parquet';
 # MAGIC 
 # MAGIC -- Converting an existing parquet table to delta
 # MAGIC CREATE TABLE  loan_stats_delta
